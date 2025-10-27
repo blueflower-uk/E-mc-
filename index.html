@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Flappy Bird Sederhana</title>
+    <style>
+        /* CSS untuk tampilan game */
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #333;
+            font-family: 'Arial', sans-serif;
+            color: white;
+            flex-direction: column;
+        }
+        h1 {
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+        canvas {
+            border: 2px solid white;
+            background-color: #f0f0f0; /* Fallback jika gradasi gagal */
+            /* Kita akan menggambar gradasi langit di JS */
+            max-width: 100%;
+            max-height: 100%;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Flappy Bird</h1>
+    <canvas id="gameCanvas" width="320" height="480"></canvas>
+
+    <script>
+        // JavaScript untuk logika game
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Variabel game
+        let bird, pipes, score, gameOver, gameStarted, frameCount;
+
+        // Pengaturan Awal (Konstanta)
+        const birdImg = {
+            x: 80,
+            width: 34,
+            height: 24,
+            color: 'yellow',
+            wingColor: '#f7c808',
+            eyeColor: 'black'
+        };
+        const gravity = 0.5;
+        const lift = -9;
+        const pipeWidth = 50;
+        const pipeGap = 120; // Jarak antar pipa atas dan bawah
+        const pipeSpeed = 3;
+        const pipeFrequency = 90; // Frame sebelum pipa baru muncul
+
+        // --- Fungsi Utama Game ---
+
+        // 1. Inisialisasi / Reset Game
+        function setup() {
+            bird = {
+                y: canvas.height / 2 - birdImg.height / 2,
+                velocity: 0
+            };
+            pipes = [];
+            score = 0;
+            gameOver = false;
+            gameStarted = true;
+            frameCount = 0;
+            // Memulai game loop
+            gameLoop(); 
+        }
+
+        // 2. Game Loop Utama
+        function gameLoop() {
+            if (gameOver) {
+                // Tampilkan layar Game Over
+                drawGameOver();
+                return; // Hentikan loop jika game over
+            }
+
+            // Update logika game
+            update();
+            
+            // Gambar semua elemen
+            draw();
+
+            // Minta browser untuk menjalankan frame berikutnya
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 3. Update Logika (Fisika, Pipa, Skor)
+        function update() {
+            frameCount++;
+
+            // Fisika Burung
+            bird.velocity += gravity;
+            bird.velocity *= 0.9; // Sedikit redaman udara
+            bird.y += bird.velocity;
+
+            // Cek Tabrakan dengan Langit & Tanah
+            if (bird.y + birdImg.height > canvas.height - 30) { // -30 untuk tanah
+                bird.y = canvas.height - 30 - birdImg.height;
+                bird.velocity = 0;
+                setGameOver();
+            }
+            if (bird.y < 0) {
+                bird.y = 0;
+                bird.velocity = 0;
+            }
+
+            // Logika Pipa
+            // Tambah pipa baru
+            if (frameCount % pipeFrequency === 0) {
+                const pipeY = Math.floor(Math.random() * (canvas.height - 30 - pipeGap - 100)) + 50;
+                pipes.push({
+                    x: canvas.width,
+                    y: pipeY,
+                    passed: false
+                });
+            }
+
+            // Gerakkan & Cek Tabrakan Pipa
+            for (let i = pipes.length - 1; i >= 0; i--) {
+                let p = pipes[i];
+                p.x -= pipeSpeed;
+
+                // Cek tabrakan dengan burung
+                if (
+                    birdImg.x + birdImg.width > p.x &&
+                    birdImg.x < p.x + pipeWidth &&
+                    (bird.y < p.y || bird.y + birdImg.height > p.y + pipeGap)
+                ) {
+                    setGameOver();
+                }
+
+                // Cek jika burung melewati pipa
+                if (p.x + pipeWidth < birdImg.x && !p.passed) {
+                    score++;
+                    p.passed = true;
+                }
+
+                // Hapus pipa yang sudah lewat layar
+                if (p.x + pipeWidth < 0) {
+                    pipes.splice(i, 1);
+                }
+            }
+        }
+
+        // 4. Menggambar Semua Elemen
+        function draw() {
+            // Gambar Langit (Gradasi Biru)
+            let sky = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            sky.addColorStop(0, '#70c5ce');
+            sky.addColorStop(1, '#b4e6e1');
+            ctx.fillStyle = sky;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Gambar Pipa
+            ctx.fillStyle = '#228B22'; // Hijau tua
+            ctx.strokeStyle = '#006400'; // Border hijau lebih tua
+            ctx.lineWidth = 2;
+            pipes.forEach(p => {
+                // Pipa atas
+                ctx.fillRect(p.x, 0, pipeWidth, p.y);
+                ctx.strokeRect(p.x, 0, pipeWidth, p.y);
+                // Pipa bawah
+                ctx.fillRect(p.x, p.y + pipeGap, pipeWidth, canvas.height - p.y - pipeGap - 30);
+                ctx.strokeRect(p.x, p.y + pipeGap, pipeWidth, canvas.height - p.y - pipeGap - 30);
+            });
+            
+            // Gambar Tanah
+            ctx.fillStyle = '#e6bf83'; // Coklat muda
+            ctx.fillRect(0, canvas.height - 30, canvas.width, 30);
+            ctx.fillStyle = '#8B4513'; // Coklat tua (garis)
+            ctx.fillRect(0, canvas.height - 30, canvas.width, 5);
+
+            // Gambar Burung
+            drawBird();
+
+            // Gambar Skor
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 30px Consolas';
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 3;
+            ctx.strokeText(score, canvas.width / 2 - 15, 50);
+            ctx.fillText(score, canvas.width / 2 - 15, 50);
+        }
+
+        // Fungsi khusus menggambar burung (agar lebih menarik)
+        function drawBird() {
+            ctx.save();
+            ctx.translate(birdImg.x + birdImg.width / 2, bird.y + birdImg.height / 2);
+            // Rotasi burung berdasarkan kecepatan (sedikit menukik atau naik)
+            let rotation = Math.max(-Math.PI / 6, Math.min(Math.PI / 4, bird.velocity / 10));
+            ctx.rotate(rotation);
+
+            // Badan
+            ctx.fillStyle = birdImg.color;
+            ctx.beginPath();
+            ctx.ellipse(0, 0, birdImg.width / 2, birdImg.height / 2, 0, 0, 2 * Math.PI);
+            ctx.fill();
+
+            // Sayap (animasi sederhana)
+            ctx.fillStyle = birdImg.wingColor;
+            let wingHeight = Math.sin(frameCount * 0.3) * 5 + 10; // Naik turun
+            ctx.beginPath();
+            ctx.ellipse(-5, 3, 8, wingHeight / 2, 0, 0, 2 * Math.PI);
+            ctx.fill();
+
+            // Mata
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(10, -5, 4, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.fillStyle = birdImg.eyeColor;
+            ctx.beginPath();
+            ctx.arc(11, -5, 2, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            // Paruh
+            ctx.fillStyle = '#f39c12';
+            ctx.beginPath();
+            ctx.moveTo(15, 0);
+            ctx.lineTo(25, -3);
+            ctx.lineTo(25, 3);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        // 5. Menampilkan Layar Awal / Game Over
+        function drawGameOver() {
+            // Latar belakang semi-transparan
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = 'white';
+            ctx.textAlign = 'center';
+
+            if (!gameStarted) {
+                // Layar Awal
+                ctx.font = 'bold 30px Consolas';
+                ctx.fillText('Flappy Bird', canvas.width / 2, canvas.height / 2 - 60);
+                ctx.font = '20px Consolas';
+                ctx.fillText('Klik atau Sentuh', canvas.width / 2, canvas.height / 2);
+                ctx.fillText('untuk Melompat', canvas.width / 2, canvas.height / 2 + 30);
+                ctx.font = '16px Consolas';
+                ctx.fillText('Mulai Permainan', canvas.width / 2, canvas.height / 2 + 70);
+            } else {
+                // Layar Game Over
+                ctx.font = 'bold 40px Consolas';
+                ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 40);
+                
+                ctx.font = '24px Consolas';
+                ctx.fillText(`Skor: ${score}`, canvas.width / 2, canvas.height / 2 + 10);
+                
+                ctx.font = '16px Consolas';
+                ctx.fillText('Klik atau Sentuh untuk Mulai Lagi', canvas.width / 2, canvas.height / 2 + 60);
+            }
+            ctx.textAlign = 'left'; // Reset alignment
+        }
+
+        // --- Fungsi Bantuan ---
+
+        function setGameOver() {
+            gameOver = true;
+        }
+
+        function jump() {
+            bird.velocity = lift;
+        }
+
+        // --- Event Listeners (Input) ---
+
+        function handleInput(e) {
+            // Mencegah perilaku default (seperti scroll saat disentuh)
+            e.preventDefault(); 
+
+            if (gameOver) {
+                // Jika game over (atau belum dimulai), klik/sentuh akan me-restart
+                setup();
+            } else {
+                // Jika game sedang berjalan, klik/sentuh akan melompat
+                jump();
+            }
+        }
+
+        // Keyboard (Spasi)
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                handleInput(e);
+            }
+        });
+
+        // Mouse (Klik)
+        canvas.addEventListener('mousedown', handleInput);
+
+        // Touch (Sentuhan HP)
+        canvas.addEventListener('touchstart', handleInput);
+
+        // --- Mulai Game ---
+        // Tampilkan layar awal saat pertama kali dimuat
+        gameStarted = false;
+        gameOver = true;
+        drawGameOver();
+
+    </script>
+
+</body>
+</html>
